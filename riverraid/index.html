@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>River Raid</title>
+    <style>
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #00f;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+
+    <script>
+        // Configurações iniciais
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const player = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 60,
+            width: 40,
+            height: 60,
+            speed: 5,
+            moveLeft: false,
+            moveRight: false,
+            canShoot: true, // Controle para o disparo
+            fuel: 100, // Combustível inicial
+            lives: 3 // Vidas iniciais
+        };
+        const enemies = [];
+        const fuelCells = [];
+        const bullets = []; // Array para armazenar os tiros
+        let score = 0;
+        let isGameOver = false;
+        let difficulty = 1; // Dificuldade inicial
+
+        // Função para desenhar o jogador (nave)
+        function drawPlayer() {
+            ctx.fillStyle = "green";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        // Função para desenhar a barra de combustível
+        function drawFuelBar() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(10, 10, 100, 20);
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(10, 10, player.fuel, 20);
+            ctx.strokeStyle = "black";
+            ctx.strokeRect(10, 10, 100, 20);
+        }
+
+        // Função para desenhar as vidas do jogador
+        function drawLives() {
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("Vidas: " + player.lives, canvas.width - 100, 30);
+        }
+
+        // Função para desenhar a pontuação do jogador
+        function drawScore() {
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("Pontuação: " + score, 10, 30);
+        }
+
+        // Função para desenhar inimigos
+        function drawEnemies() {
+            enemies.forEach(enemy => {
+                ctx.fillStyle = "red";
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                enemy.y += 3 * difficulty; // Velocidade aumenta com a dificuldade
+            });
+        }
+
+        // Função para desenhar células de combustível
+        function drawFuelCells() {
+            fuelCells.forEach(fuel => {
+                ctx.fillStyle = "yellow";
+                ctx.fillRect(fuel.x, fuel.y, fuel.width, fuel.height);
+                fuel.y += 2 * difficulty;
+            });
+        }
+
+        // Função para desenhar os tiros
+        function drawBullets() {
+            bullets.forEach((bullet, index) => {
+                ctx.fillStyle = "white";
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                bullet.y -= 5; // Velocidade do tiro
+
+                // Remove o tiro se sair da tela
+                if (bullet.y < 0) {
+                    bullets.splice(index, 1);
+                }
+            });
+        }
+
+        // Função principal de renderização do jogo
+        function renderGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawPlayer();
+            drawFuelBar();
+            drawLives();
+            drawScore(); // Desenha a pontuação na tela
+            drawEnemies();
+            drawFuelCells();
+            drawBullets();
+
+            if (player.moveLeft && player.x > 0) player.x -= player.speed;
+            if (player.moveRight && player.x + player.width < canvas.width) player.x += player.speed;
+
+            // Consumir combustível ao longo do tempo
+            player.fuel -= 0.05;
+            if (player.fuel <= 0) {
+                isGameOver = true; // Fim do jogo se o combustível acabar
+            }
+
+            // Verifica colisões e atualiza o jogo
+            checkCollisions();
+            if (!isGameOver) {
+                requestAnimationFrame(renderGame);
+            } else {
+                gameOver();
+            }
+        }
+
+        // Verificar colisões
+        function checkCollisions() {
+            // Colisão dos tiros com os inimigos
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach((enemy, eIndex) => {
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+                        // Remove o tiro e o inimigo se houver colisão
+                        enemies.splice(eIndex, 1);
+                        bullets.splice(bIndex, 1);
+                        score += 50; // Pontuação por destruir inimigos
+                    }
+                });
+            });
+
+            // Colisão do jogador com inimigos
+            enemies.forEach((enemy, index) => {
+                if (player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y) {
+                    player.lives--; // Perde uma vida ao colidir com inimigo
+                    enemies.splice(index, 1); // Remove inimigo após a colisão
+
+                    if (player.lives === 0) {
+                        isGameOver = true; // Fim do jogo se as vidas acabarem
+                    }
+                }
+                if (enemy.y > canvas.height) {
+                    enemies.splice(index, 1); // Remove inimigo fora da tela
+                    score += 10; // Pontuação por passar inimigos
+                }
+            });
+
+            // Colisão do jogador com combustível
+            fuelCells.forEach((fuel, index) => {
+                if (player.x < fuel.x + fuel.width &&
+                    player.x + player.width > fuel.x &&
+                    player.y < fuel.y + fuel.height &&
+                    player.y + player.height > fuel.y) {
+                    fuelCells.splice(index, 1); // Coleta combustível
+                    player.fuel = Math.min(100, player.fuel + 20); // Reabastece até o máximo de 100
+                    score += 20; // Pontuação por coletar combustível
+                }
+            });
+
+            // Colisões com as paredes do rio ou pontes
+            // Ajuste para que o jogador perca vida apenas se colidir com as bordas
+            if (player.x < 0 || player.x + player.width > canvas.width) { // Verifica se colidiu com as bordas
+                player.lives--; // Perde uma vida ao colidir com parede
+                player.x = Math.max(0, Math.min(player.x, canvas.width - player.width)); // Impede que saia da tela
+                if (player.lives === 0) {
+                    isGameOver = true;
+                }
+            }
+        }
+
+        // Função de fim de jogo
+        function gameOver() {
+            ctx.font = "30px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("Game Over", canvas.width / 2 - 80, canvas.height / 2);
+            ctx.fillText("Pontuação: " + score, canvas.width / 2 - 80, canvas.height / 2 + 40);
+        }
+
+        // Função para gerar novos inimigos e células de combustível
+        function generateObjects() {
+            setInterval(() => {
+                const enemy = {x: Math.random() * (canvas.width - 40), y: -60, width: 40, height: 60};
+                enemies.push(enemy);
+            }, 1000 / difficulty); // A frequência aumenta conforme a dificuldade
+            setInterval(() => {
+                const fuel = {x: Math.random() * (canvas.width - 30), y: -30, width: 30, height: 30};
+                fuelCells.push(fuel);
+            }, 4000);
+        }
+
+        // Aumenta a dificuldade ao longo do tempo
+        function increaseDifficulty() {
+            setInterval(() => {
+                difficulty += 0.1; // Aumenta a dificuldade gradualmente
+            }, 5000); // Aumenta a dificuldade a cada 5 segundos
+        }
+
+        // Função para disparar tiros
+        function shoot() {
+            if (player.canShoot) {
+                const bullet = {x: player.x + player.width / 2 - 5, y: player.y, width: 5, height: 10};
+                bullets.push(bullet);
+                player.canShoot = false; // Controla a taxa de disparo
+                setTimeout(() => {
+                    player.canShoot = true;
+                }, 300); // Tempo de espera entre os tiros
+            }
+        }
+
+        // Detecta teclas pressionadas
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "ArrowLeft") player.moveLeft = true;
+            if (e.code === "ArrowRight") player.moveRight = true;
+            if (e.code === "Space") shoot(); // Atira com a tecla espaço
+        });
+
+        // Detecta teclas soltas
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "ArrowLeft") player.moveLeft = false;
+            if (e.code === "ArrowRight") player.moveRight = false;
+        });
+
+        // Inicia o jogo
+        generateObjects();
+        increaseDifficulty();
+        renderGame();
+    </script>
+</body>
+</html>
